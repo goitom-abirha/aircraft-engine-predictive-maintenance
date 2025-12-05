@@ -20,7 +20,7 @@ Project Structure
 notebooks/
     01_EDA.ipynb
     02_Feature_Engineering.ipynb
-    03_Model_Training.ipynb
+   03_Model_Training_v2.ipynb
 models/
     lstm_fd001_best.h5
     gru_fd001_best.h5
@@ -28,8 +28,8 @@ data/
     raw/
     processed/
     ```
-🗓️ Weekly Progress (Concise)
-✅ Week 1: EDA
+ Weekly Progress (Concise)
+ Week 1: EDA
 
 Loaded NASA CMAPSS dataset
 
@@ -85,3 +85,4 @@ https://ti.arc.nasa.gov/tech/dash/groups/pcoe/prognostic-data-repository/
 
 Goitom Abirha
 Data Scientist – Predictive Maintenance | Deep Learning
+
