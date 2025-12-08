@@ -1,89 +1,140 @@
 ✈️ Aircraft Engine Predictive Maintenance
-Predicting Remaining Useful Life (RUL) Using NASA CMAPSS Turbofan Data
+Predict Remaining Useful Life (RUL) of Jet Engines Using NASA CMAPSS FD001 + LSTM/GRU Models
 
-This project builds a real-world predictive maintenance system using the NASA C-MAPSS turbofan dataset.
-The goal is to predict Remaining Useful Life (RUL) of jet engines using deep learning models (LSTM & GRU).
+This project builds a fully operational Predictive Maintenance system using NASA’s C-MAPSS turbofan engine dataset.
+It uses deep learning (LSTM + GRU) to estimate Remaining Useful Life (RUL) and includes an interactive Streamlit dashboard for real-time fleet monitoring.
 
-🚀 Project Summary (Short)
+🚀 Key Features
+🔧 End-to-End Predictive Maintenance Pipeline
 
-Built end-to-end predictive maintenance pipeline
+Load & clean NASA CMAPSS FD001 dataset
 
-Prepared time-series sensor sequences for modeling
+Create sensor-based time-series sequences
 
-Trained LSTM and GRU models for accurate RUL prediction
+Train deep learning models for RUL regression
 
-Saved best models for real-time inference
+Save best models for real-time inference
 
-Preparing a Streamlit maintenance dashboard (Week 4)
-```
-Project Structure
-notebooks/
-    01_EDA.ipynb
-    02_Feature_Engineering.ipynb
-   03_Model_Training_v2.ipynb
-models/
-    lstm_fd001_best.h5
-    gru_fd001_best.h5
-data/
-    raw/
-    processed/
-    ```
- Weekly Progress (Concise)
- Week 1: EDA
+📊 Streamlit Dashboard (Production-Ready)
 
-Loaded NASA CMAPSS dataset
+Upload custom engine cycles or use built-in sample data
 
-Visualized engine degradation & sensor behavior
+Predict RUL using LSTM or GRU
 
-Identified key sensors and failure cycles
+Generate PDF health reports
 
- Week 2: Feature Engineering
+SHAP-based or fallback feature importance
 
-Normalized selected sensors
+Sensor anomaly detection using Z-score
 
-Created sliding windows (sequence length = 30)
+Fleet-level risk ranking
+
+🤖 Deep Learning Models
+
+Sequence length: 30 cycles
+
+Features: key sensors + operational settings
+
+Models: LSTM + GRU
+
+🧠 Model Performance
+Model	MAE	RMSE
+LSTM	x.xx	x.xx
+GRU	x.xx	x.xx
+
+Replace with your actual metrics from Week 3 training.
+
+🗂️ Project Structure
+aircraft-engine-predictive-maintenance/
+│
+├── app.py                     <- Streamlit dashboard
+├── requirements.txt
+├── README.md
+│
+├── models/                    <- Saved deep learning models
+│     ├── lstm_fd001_best.h5
+│     └── gru_fd001_best.h5
+│
+├── data/
+│     └── raw/
+│          ├── test_FD001.txt
+│          ├── train_FD001.txt
+│          └── (other CMAPSS files optional)
+│
+└── notebooks/
+      ├── 01_EDA.ipynb
+      ├── 02_Feature_Engineering.ipynb
+      └── 03_Model_Training_v2.ipynb
+
+📈 Weekly Progress Summary
+Week 1 – Exploratory Data Analysis
+
+Loaded all NASA CMAPSS FD001 files
+
+Visualized sensor degradation
+
+Identified most predictive sensors
+
+Understood operational settings behavior
+
+Week 2 – Feature Engineering
+
+Scaled key sensors using MinMax
+
+Created sliding windows (30-cycle sequences)
 
 Generated RUL labels
 
 Saved training arrays (X_train, y_train)
 
-Week 3: Model Training (LSTM & GRU)
+Week 3 – Model Training
 
-Trained two deep learning models:
+Trained and evaluated two deep learning models:
 
-Model	MAE	RMSE
-LSTM	x.xx	x.xx
-GRU	x.xx	x.xx
+LSTM
 
-Replace x.xx with your actual values.
+GRU
 
-Saved models for deployment:
+Saved best model weights:
 
-models/lstm_fd001_best.h5
-models/gru_fd001_best.h5
+models/
+   lstm_fd001_best.h5
+   gru_fd001_best.h5
 
- Week 4 (Next): Streamlit Dashboard
+Week 4 – Streamlit Deployment
 
 Real-time RUL prediction
 
-Engine health status
+Engine-level PDF reports
 
-Interactive sensor visualization
+Fleet-level monitoring dashboard
 
- Installation
+Sensor anomaly detection
+
+SHAP explainability (with safe fallback)
+
+▶️ Run Locally
+1. Install dependencies
 pip install -r requirements.txt
 
-Run notebooks:
-jupyter notebook
+2. Run the Streamlit dashboard
+streamlit run app.py
+
+🌐 Live Application
+
+Replace with your Streamlit Cloud URL:
+
+👉 Live App:
+https://your-app-name.streamlit.app
 
 📚 Dataset
 
 NASA C-MAPSS Turbofan Engine Degradation Dataset
-https://ti.arc.nasa.gov/tech/dash/groups/pcoe/prognostic-data-repository/
+🔗 https://ti.arc.nasa.gov/tech/dash/groups/pcoe/prognostic-data-repository/
 
-👤 Author
+👤 Author – Goitom Abirha
 
-Goitom Abirha
-Data Scientist – Predictive Maintenance | Deep Learning
-
-
+Data Scientist – Predictive Maintenance & Deep Learning
+LinkedIn: https://linkedin.com/in/
+...
+GitHub: https://github.com/goitom-abirha
