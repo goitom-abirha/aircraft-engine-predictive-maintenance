@@ -10,3 +10,6 @@ notebook
 pathlib
 plotly
 streamlit
+plotly
+shap
+fpdf2
