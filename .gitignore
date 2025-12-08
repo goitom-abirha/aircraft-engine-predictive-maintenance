@@ -1,8 +1,8 @@
 # ================================
-#  Ignore Raw Dataset (Important)
+#  Allow Raw Dataset (important)
 # ================================
-data/raw/*
-data/*.zip
+# data/raw/*      <-- REMOVED so test_FD001.txt can be tracked
+data/*.zip        # still ignore zip files
 
 # ================================
 #  Jupyter Notebook Checkpoints
@@ -20,11 +20,11 @@ __pycache__/
 # ================================
 #  Model and Large Binary Files
 # ================================
-*.h5
-*.pkl
-*.joblib
-*.pt
-models/
+# *.h5           <-- ALLOW .h5 so models can be pushed
+# *.pkl
+# *.joblib
+# *.pt
+# models/        <-- ALLOW entire models folder
 
 # ================================
 #  Office Temporary Files
