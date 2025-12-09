@@ -1,16 +1,25 @@
-pandas
-numpy
-matplotlib
-seaborn
-scikit-learn
-tensorflow
-joblib
-jupyter
-notebook
-pathlib
-plotly
-streamlit
-plotly
-shap
-fpdf2
-fpdf
+# Core scientific stack (versions compatible with TF 2.10.1)
+numpy==1.23.5
+pandas==1.5.3
+scikit-learn==1.2.2
+
+# Plotting
+matplotlib==3.7.5
+seaborn==0.13.2
+plotly==5.22.0
+
+# Deep learning (old Keras inside TensorFlow 2.x)
+tensorflow==2.10.1
+h5py==3.10.0
+
+# Streamlit app
+streamlit==1.40.0
+
+# Extras
+shap==0.44.1
+joblib==1.4.2
+fpdf2==2.7.9
+
+# Optional (only needed for working in notebooks, not for Streamlit)
+jupyter==1.0.0
+notebook==7.2.2
