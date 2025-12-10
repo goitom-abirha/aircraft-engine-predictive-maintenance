@@ -2,11 +2,20 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import plotly.express as px
 from fpdf import FPDF
+
+# -----------------------------
+# TensorFlow: optional (local only)
+# -----------------------------
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except Exception:
+    tf = None
+    TF_AVAILABLE = False
 
 # Try to import SHAP, but allow app to run without it
 try:
@@ -44,6 +53,12 @@ FEATURE_COLUMNS = USEFUL_SENSORS + ["setting_1", "setting_2", "setting_3"]  # 12
 # -----------------------------
 @st.cache_resource
 def load_model(path: Path):
+    """
+    Load a Keras model when TensorFlow is available.
+    In cloud/demo mode (no TF), this should not be called.
+    """
+    if not TF_AVAILABLE:
+        raise RuntimeError("TensorFlow is not available in this environment.")
     return tf.keras.models.load_model(path)
 
 
@@ -99,6 +114,15 @@ def failure_probability(rul: float, max_rul: float = 150.0) -> float:
     return float(max(0.0, min(1.0, prob)))
 
 
+def simple_baseline_rul(eng_df: pd.DataFrame) -> float:
+    """
+    Very simple baseline RUL: assume failure around 200 cycles.
+    Used when TensorFlow/deep model is not available (Streamlit Cloud).
+    """
+    last_cycle = eng_df["cycle"].max()
+    return max(0.0, 200.0 - float(last_cycle))
+
+
 def plot_sensor_trends(engine_df: pd.DataFrame, engine_id: int):
     """
     Plot key sensor trends over cycles for a given engine.
@@ -120,7 +144,7 @@ def compute_shap_for_engine(model, scaled_engine: pd.DataFrame):
     Compute SHAP values for the last sequence of an engine.
     Returns feature names and aggregated SHAP importance values.
     """
-    if shap is None:
+    if shap is None or not TF_AVAILABLE:
         return None, None
 
     X = make_sequences(scaled_engine, FEATURE_COLUMNS, SEQ_LEN)
@@ -142,7 +166,11 @@ def compute_rul_timeline(engine_df: pd.DataFrame, model) -> pd.DataFrame:
     """
     For a single engine, compute predicted RUL at each time step
     (using sliding sequences), to visualize degradation over time.
+    Only valid when a deep model is available.
     """
+    if not TF_AVAILABLE:
+        return pd.DataFrame()
+
     engine_df = engine_df.sort_values("cycle").reset_index(drop=True)
     scaled_engine = preprocess_engine_from_df(engine_df)
     X = make_sequences(scaled_engine, FEATURE_COLUMNS, SEQ_LEN)
@@ -219,13 +247,20 @@ def build_engine_report_pdf(
 @st.cache_data
 def compute_fleet_rul(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
     """
-    Compute RUL + status + failure probability for all engines in the dataset
-    using the selected model (LSTM or GRU).
+    Compute RUL + status + failure probability for all engines in the dataset.
+    - If TensorFlow + models are available: use LSTM/GRU predictions.
+    - Otherwise: use a simple baseline RUL based on last cycle.
     """
-    if model_name == "GRU" and GRU_PATH.exists():
-        model = load_model(GRU_PATH)
-    else:
-        model = load_model(LSTM_PATH)
+    use_deep_model = False
+    model = None
+
+    if TF_AVAILABLE:
+        if model_name == "GRU" and GRU_PATH.exists():
+            model = load_model(GRU_PATH)
+            use_deep_model = True
+        elif LSTM_PATH.exists():
+            model = load_model(LSTM_PATH)
+            use_deep_model = True
 
     records = []
     for eid in sorted(df["engine_id"].unique()):
@@ -233,14 +268,19 @@ def compute_fleet_rul(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
         if len(eng_df) < SEQ_LEN:
             continue
 
-        scaled_engine = preprocess_engine_from_df(eng_df)
-        X = make_sequences(scaled_engine, FEATURE_COLUMNS, SEQ_LEN)
-        if X.shape[0] == 0:
-            continue
+        if use_deep_model:
+            scaled_engine = preprocess_engine_from_df(eng_df)
+            X = make_sequences(scaled_engine, FEATURE_COLUMNS, SEQ_LEN)
+            if X.shape[0] == 0:
+                continue
 
-        pred = model.predict(X, verbose=0)
-        rul_raw = float(pred[-1])
-        rul = max(0.0, rul_raw)  # clamp at 0 so we don't show negative RUL
+            pred = model.predict(X, verbose=0)
+            rul_raw = float(pred[-1])
+            rul = max(0.0, rul_raw)  # clamp at 0 so we don't show negative RUL
+        else:
+            # Baseline: no TF available
+            rul = simple_baseline_rul(eng_df)
+
         status = get_engine_status(rul)
         prob = failure_probability(rul)
 
@@ -273,6 +313,13 @@ This dashboard uses deep learning models (**LSTM / GRU**) trained on the NASA **
 to predict **Remaining Useful Life (RUL)** and visualize the health of a fleet of turbofan engines.
 """
 )
+
+if not TF_AVAILABLE:
+    st.info(
+        "Running in **demo mode** (Streamlit Cloud): TensorFlow is not available here.\n\n"
+        "- Fleet view uses a simple baseline RUL estimate based on last cycle.\n"
+        "- Full LSTM/GRU deep learning predictions are available in your local `tf` conda environment."
+    )
 
 # -----------------------------
 # Sidebar: data source & model choice
@@ -427,45 +474,145 @@ with tab_engine:
         st.error(f"Missing required feature columns: {missing_features}")
         st.stop()
 
-    # Choose which model to use for this engine
-    if model_choice == "GRU" and GRU_PATH.exists():
-        model = load_model(GRU_PATH)
+    # ---------- Deep model available (local) ----------
+    if TF_AVAILABLE and (LSTM_PATH.exists() or GRU_PATH.exists()):
+        # Choose which model to use for this engine
+        if model_choice == "GRU" and GRU_PATH.exists():
+            model = load_model(GRU_PATH)
+        else:
+            model = load_model(LSTM_PATH)
+
+        scaled_engine = preprocess_engine_from_df(engine_sim_df)
+        X_sequences = make_sequences(scaled_engine, FEATURE_COLUMNS, SEQ_LEN)
+
+        if X_sequences.shape[0] == 0:
+            st.error(
+                f"Engine {selected_engine} does not have at least {SEQ_LEN} cycles "
+                "up to the selected simulation point. Cannot create sequences."
+            )
+        else:
+            rul_pred = model.predict(X_sequences, verbose=0)
+            predicted_rul_raw = float(rul_pred[-1])
+            predicted_rul = max(0.0, predicted_rul_raw)
+            prob = failure_probability(predicted_rul)
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("Predicted Remaining Useful Life", f"{predicted_rul:.2f} cycles")
+
+            with col2:
+                st.metric("Failure Probability", f"{prob * 100:.1f} %")
+
+            with col3:
+                st.markdown("### Health Status")
+                st.write(get_engine_status(predicted_rul))
+
+            st.markdown("---")
+            st.markdown(
+                f"Model input shape for this engine: `{X_sequences.shape[0]} sequences × "
+                f"{SEQ_LEN} cycles × {len(FEATURE_COLUMNS)} features`"
+            )
+
+            # ---------- PDF report download ----------
+            report_bytes = build_engine_report_pdf(
+                engine_id=selected_engine,
+                sim_cycle=sim_cycle,
+                predicted_rul=predicted_rul,
+                failure_prob=prob,
+                status_text=get_engine_status(predicted_rul),
+            )
+            st.download_button(
+                label="📄 Download Engine Health PDF",
+                data=report_bytes,
+                file_name=f"engine_{selected_engine}_health_report.pdf",
+                mime="application/pdf",
+            )
+
+            # ---------- RUL timeline ----------
+            with st.expander("View predicted RUL degradation over time"):
+                timeline_df = compute_rul_timeline(engine_sim_df, model)
+                if timeline_df.empty:
+                    st.write("Not enough data to build a RUL timeline.")
+                else:
+                    fig_line = px.line(
+                        timeline_df,
+                        x="cycle",
+                        y="predicted_RUL",
+                        labels={"cycle": "Cycle", "predicted_RUL": "Predicted RUL (cycles)"},
+                        title="Predicted Remaining Useful Life over time",
+                    )
+                    st.plotly_chart(fig_line, use_container_width=True)
+
+            # ---------- Feature Importance (SHAP with safe fallback) ----------
+            with st.expander("Explain prediction"):
+                try:
+                    feature_names, shap_scores = compute_shap_for_engine(model, scaled_engine)
+
+                    if feature_names is None:
+                        raise Exception("SHAP not available")
+
+                    shap_df = pd.DataFrame({
+                        "feature": feature_names,
+                        "importance": shap_scores
+                    }).sort_values("importance", ascending=True)
+
+                    fig_imp, ax_imp = plt.subplots(figsize=(5, 6))
+                    ax_imp.barh(shap_df["feature"], shap_df["importance"])
+                    ax_imp.set_xlabel("Mean |SHAP value| (impact on RUL)")
+                    ax_imp.set_title("Feature importance for this engine")
+                    st.pyplot(fig_imp)
+
+                except Exception:
+                    st.warning("SHAP unavailable — showing approximate feature importance instead.")
+
+                    try:
+                        # Universal fallback: variance-based feature importance
+                        last_seq = X_sequences[-1]  # shape: (seq_len, num_features)
+                        variances = np.var(last_seq, axis=0)
+
+                        fi_df = pd.DataFrame({
+                            "feature": FEATURE_COLUMNS,
+                            "importance": variances
+                        }).sort_values("importance", ascending=True)
+
+                        fig_fi, ax_fi = plt.subplots(figsize=(5, 6))
+                        ax_fi.barh(fi_df["feature"], fi_df["importance"])
+                        ax_fi.set_xlabel("Feature variance (proxy importance)")
+                        ax_fi.set_title("Feature importance (variance-based fallback)")
+                        st.pyplot(fig_fi)
+
+                    except Exception as e:
+                        st.error(f"Could not compute fallback feature importance: {e}")
+
+    # ---------- Demo mode (no deep model) ----------
     else:
-        model = load_model(LSTM_PATH)
-
-    scaled_engine = preprocess_engine_from_df(engine_sim_df)
-    X_sequences = make_sequences(scaled_engine, FEATURE_COLUMNS, SEQ_LEN)
-
-    if X_sequences.shape[0] == 0:
-        st.error(
-            f"Engine {selected_engine} does not have at least {SEQ_LEN} cycles "
-            "up to the selected simulation point. Cannot create sequences."
+        st.warning(
+            "Deep learning models (LSTM/GRU) are not available in this environment.\n\n"
+            "Showing baseline RUL estimate using last cycle instead."
         )
-    else:
-        rul_pred = model.predict(X_sequences, verbose=0)
-        predicted_rul_raw = float(rul_pred[-1])
-        predicted_rul = max(0.0, predicted_rul_raw)
+
+        predicted_rul = simple_baseline_rul(engine_sim_df)
         prob = failure_probability(predicted_rul)
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric("Predicted Remaining Useful Life", f"{predicted_rul:.2f} cycles")
+            st.metric("Estimated Remaining Useful Life", f"{predicted_rul:.2f} cycles")
 
         with col2:
-            st.metric("Failure Probability", f"{prob * 100:.1f} %")
+            st.metric("Failure Probability (baseline)", f"{prob * 100:.1f} %")
 
         with col3:
-            st.markdown("### Health Status")
+            st.markdown("### Health Status (baseline)")
             st.write(get_engine_status(predicted_rul))
 
         st.markdown("---")
         st.markdown(
-            f"Model input shape for this engine: `{X_sequences.shape[0]} sequences × "
-            f"{SEQ_LEN} cycles × {len(FEATURE_COLUMNS)} features`"
+            "Baseline mode uses a simple rule-of-thumb estimate around 200 cycles to approximate RUL. "
+            "For full LSTM/GRU predictions, run this app locally with TensorFlow installed."
         )
 
-        # ---------- PDF report download ----------
         report_bytes = build_engine_report_pdf(
             engine_id=selected_engine,
             sim_cycle=sim_cycle,
@@ -474,100 +621,44 @@ with tab_engine:
             status_text=get_engine_status(predicted_rul),
         )
         st.download_button(
-            label="📄 Download Engine Health PDF",
+            label="📄 Download Engine Health PDF (baseline)",
             data=report_bytes,
-            file_name=f"engine_{selected_engine}_health_report.pdf",
+            file_name=f"engine_{selected_engine}_health_report_baseline.pdf",
             mime="application/pdf",
         )
 
-        # ---------- RUL timeline ----------
-        with st.expander("View predicted RUL degradation over time"):
-            timeline_df = compute_rul_timeline(engine_sim_df, model)
-            if timeline_df.empty:
-                st.write("Not enough data to build a RUL timeline.")
-            else:
-                fig_line = px.line(
-                    timeline_df,
-                    x="cycle",
-                    y="predicted_RUL",
-                    labels={"cycle": "Cycle", "predicted_RUL": "Predicted RUL (cycles)"},
-                    title="Predicted Remaining Useful Life over time",
-                )
-                st.plotly_chart(fig_line, use_container_width=True)
+    # ---------- Anomaly Detection (works in both modes) ----------
+    with st.expander("Detect sensor anomalies (z-score)"):
+        window = st.slider("Rolling window size", min_value=10, max_value=100, value=30, step=5)
+        z_threshold = st.slider("Z-score threshold", min_value=2.0, max_value=5.0, value=3.0, step=0.5)
 
-        # ---------- Feature Importance (SHAP with safe fallback) ----------
-        with st.expander("Explain prediction"):
-            try:
-                feature_names, shap_scores = compute_shap_for_engine(model, scaled_engine)
+        sensors_to_check = ["sensor_2", "sensor_3", "sensor_7", "sensor_11"]
+        anomalies = []
 
-                if feature_names is None:
-                    raise Exception("SHAP not available")
+        for sensor in sensors_to_check:
+            if sensor not in engine_sim_df.columns:
+                continue
 
-                shap_df = pd.DataFrame({
-                    "feature": feature_names,
-                    "importance": shap_scores
-                }).sort_values("importance", ascending=True)
+            rolling_mean = engine_sim_df[sensor].rolling(window=window).mean()
+            rolling_std = engine_sim_df[sensor].rolling(window=window).std()
 
-                fig_imp, ax_imp = plt.subplots(figsize=(5, 6))
-                ax_imp.barh(shap_df["feature"], shap_df["importance"])
-                ax_imp.set_xlabel("Mean |SHAP value| (impact on RUL)")
-                ax_imp.set_title("Feature importance for this engine")
-                st.pyplot(fig_imp)
+            # Avoid division by zero
+            rolling_std = rolling_std.replace(0, 1e-6)
 
-            except Exception:
-                st.warning("SHAP unavailable — showing approximate feature importance instead.")
+            z = (engine_sim_df[sensor] - rolling_mean) / rolling_std
+            mask = z.abs() > z_threshold
 
-                try:
-                    # Universal fallback: variance-based feature importance
-                    last_seq = X_sequences[-1]  # shape: (seq_len, num_features)
-                    variances = np.var(last_seq, axis=0)
+            for idx in engine_sim_df[mask].index:
+                anomalies.append({
+                    "cycle": int(engine_sim_df.loc[idx, "cycle"]),
+                    "sensor": sensor,
+                    "value": float(engine_sim_df.loc[idx, sensor]),
+                    "z_score": float(z.loc[idx])
+                })
 
-                    fi_df = pd.DataFrame({
-                        "feature": FEATURE_COLUMNS,
-                        "importance": variances
-                    }).sort_values("importance", ascending=True)
-
-                    fig_fi, ax_fi = plt.subplots(figsize=(5, 6))
-                    ax_fi.barh(fi_df["feature"], fi_df["importance"])
-                    ax_fi.set_xlabel("Feature variance (proxy importance)")
-                    ax_fi.set_title("Feature importance (variance-based fallback)")
-                    st.pyplot(fig_fi)
-
-                except Exception as e:
-                    st.error(f"Could not compute fallback feature importance: {e}")
-
-        # ---------- Anomaly Detection ----------
-        with st.expander("Detect sensor anomalies (z-score)"):
-            window = st.slider("Rolling window size", min_value=10, max_value=100, value=30, step=5)
-            z_threshold = st.slider("Z-score threshold", min_value=2.0, max_value=5.0, value=3.0, step=0.5)
-
-            sensors_to_check = ["sensor_2", "sensor_3", "sensor_7", "sensor_11"]
-            anomalies = []
-
-            for sensor in sensors_to_check:
-                if sensor not in engine_sim_df.columns:
-                    continue
-
-                rolling_mean = engine_sim_df[sensor].rolling(window=window).mean()
-                rolling_std = engine_sim_df[sensor].rolling(window=window).std()
-
-                # Avoid division by zero
-                rolling_std = rolling_std.replace(0, 1e-6)
-
-                z = (engine_sim_df[sensor] - rolling_mean) / rolling_std
-                mask = z.abs() > z_threshold
-
-                for idx in engine_sim_df[mask].index:
-                    anomalies.append({
-                        "cycle": int(engine_sim_df.loc[idx, "cycle"]),
-                        "sensor": sensor,
-                        "value": float(engine_sim_df.loc[idx, sensor]),
-                        "z_score": float(z.loc[idx])
-                    })
-
-            if anomalies:
-                anom_df = pd.DataFrame(anomalies).sort_values("cycle")
-                st.write("Detected anomalies:")
-                st.dataframe(anom_df, use_container_width=True)
-            else:
-                st.write("No anomalies detected with current settings.")
+        if anomalies:
+            anom_df = pd.DataFrame(anomalies).sort_values("cycle")
+            st.write("Detected anomalies:")
+            st.dataframe(anom_df, use_container_width=True)
+        else:
+            st.write("No anomalies detected with current settings.")
