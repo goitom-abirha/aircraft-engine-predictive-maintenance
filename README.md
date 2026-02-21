@@ -125,7 +125,7 @@ streamlit run app.py
 Replace with your Streamlit Cloud URL:
 
 👉 Live App:
-https://your-app-name.streamlit.app
+https://aircraft-engine-predictive-maintenance-fia9afdhmvn34uaicwneul.streamlit.app/
 
 📚 Dataset
 
