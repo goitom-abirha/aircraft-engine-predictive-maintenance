@@ -275,6 +275,6 @@ NASA C-MAPSS Turbofan Engine Degradation Dataset
 👤 Author – Goitom Abirha
 
 Data Scientist – Predictive Maintenance & Deep Learning
-LinkedIn: https://linkedin.com/in/
+LinkedIn: www.linkedin.com/in/goitom-abirha-089428397
 ...
 GitHub: https://github.com/goitom-abirha
