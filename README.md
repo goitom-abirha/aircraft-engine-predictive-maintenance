@@ -6,7 +6,7 @@ This project demonstrates how machine learning can be used to predict aircraft e
 
 ---
 
-# Project Overview
+## Project Overview
 
 Aircraft engine failures can lead to costly downtime, safety risks, and Aircraft-on-Ground (AOG) events.
 
@@ -21,7 +21,7 @@ The system allows maintenance teams to identify high-risk engines early and opti
 
 ---
 
-# Dataset
+## Dataset
 
 NASA **C-MAPSS Turbofan Engine Degradation Dataset**
 
@@ -43,7 +43,7 @@ This project uses the **FD001 subset** which contains:
 
 ---
 
-# Machine Learning Pipeline
+## Machine Learning Pipeline
 
 ### Data Preprocessing
 
@@ -73,7 +73,7 @@ Simplified recurrent architecture with fewer parameters.
 
 ---
 
-# Model Performance
+## Model Performance
 
 | Model | MAE | RMSE |
 |------|------|------|
@@ -84,7 +84,7 @@ The LSTM model achieved slightly better predictive accuracy.
 
 ---
 
-# Streamlit Dashboard
+## Streamlit Dashboard
 
 The project includes an interactive **Streamlit dashboard** for real-time engine monitoring.
 
@@ -99,7 +99,7 @@ Dashboard features:
 
 ---
 
-# Business Impact
+## Business Impact
 
 Predictive maintenance helps airlines:
 
@@ -112,9 +112,9 @@ Predictive maintenance helps airlines:
 In aviation systems, **false negatives (missed failures)** are significantly more costly than false positives because they may lead to catastrophic engine failure.
 
 ---
+## Project Structure
 
-# Project Structure
-
+```
 aircraft-engine-predictive-maintenance
 │
 ├── app.py
@@ -122,43 +122,49 @@ aircraft-engine-predictive-maintenance
 ├── README.md
 │
 ├── models
-│ ├── lstm_fd001_best.h5
-│ └── gru_fd001_best.h5
+│   ├── lstm_fd001_best.h5
+│   └── gru_fd001_best.h5
 │
 ├── data
-│ └── raw
+│   └── raw
 │
 └── notebooks
-├── 01_EDA.ipynb
-├── 02_Feature_Engineering.ipynb
-└── 03_Model_Training.ipynb
+    ├── 01_EDA.ipynb
+    ├── 02_Feature_Engineering.ipynb
+    └── 03_Model_Training.ipynb
+```
 
-
----
-
-# Run Locally
+## Run Locally
 
 Install dependencies:
 
+```
 pip install -r requirements.txt
-
+```
 
 Run the Streamlit dashboard:
 
+```
 streamlit run app.py
+```
 
-
----
-
-# Live Application
+## Live Application
 
 Streamlit demo:
 
 https://aircraft-engine-predictive-maintenance-fia9afdhmvn34uaicwneul.streamlit.app/
 
 ---
+## Technologies Used
 
-# Author
+• Python  
+• TensorFlow / Keras  
+• Scikit-learn  
+• Pandas & NumPy  
+• Streamlit  
+• Matplotlib / Seaborn  
+
+## Author
 
 **Goitom Abirha**  
 Data Scientist – Predictive Maintenance & Machine Learning
