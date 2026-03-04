@@ -114,6 +114,20 @@ def failure_probability(rul: float, max_rul: float = 150.0) -> float:
     return float(max(0.0, min(1.0, prob)))
 
 
+# ✅ NEW: Risk Level Ranking
+def get_risk_level(rul: float) -> str:
+    """
+    Classify engine risk based on predicted RUL.
+    You can adjust these thresholds based on your MRO policy.
+    """
+    if rul <= 20:
+        return "🔴 High Risk"
+    elif rul <= 50:
+        return "🟡 Medium Risk"
+    else:
+        return "🟢 Low Risk"
+
+
 def simple_baseline_rul(eng_df: pd.DataFrame) -> float:
     """
     Very simple baseline RUL: assume failure around 200 cycles.
@@ -196,12 +210,11 @@ def build_engine_report_pdf(
     Returns raw PDF bytes for download.
     FPDF default fonts are NOT Unicode, so we strip emojis and fancy characters.
     """
-    # ---- sanitize status text (remove emojis and fancy dash) ----
     safe_status = status_text
     safe_status = safe_status.replace("🟢", "HEALTHY")
     safe_status = safe_status.replace("🟡", "WARNING")
     safe_status = safe_status.replace("🔴", "CRITICAL")
-    safe_status = safe_status.replace("—", "-")  # replace long dash with normal dash
+    safe_status = safe_status.replace("—", "-")
 
     pdf = FPDF()
     pdf.add_page()
@@ -234,12 +247,11 @@ def build_engine_report_pdf(
         ln=True,
     )
 
-    # In some fpdf versions, output(dest="S") returns a bytearray, not str.
     result = pdf.output(dest="S")
     if isinstance(result, str):
         pdf_bytes = result.encode("latin-1")
     else:
-        pdf_bytes = bytes(result)  # bytearray or already bytes
+        pdf_bytes = bytes(result)
 
     return pdf_bytes
 
@@ -247,7 +259,7 @@ def build_engine_report_pdf(
 @st.cache_data
 def compute_fleet_rul(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
     """
-    Compute RUL + status + failure probability for all engines in the dataset.
+    Compute RUL + status + failure probability + risk_level for all engines in the dataset.
     - If TensorFlow + models are available: use LSTM/GRU predictions.
     - Otherwise: use a simple baseline RUL based on last cycle.
     """
@@ -276,19 +288,20 @@ def compute_fleet_rul(df: pd.DataFrame, model_name: str) -> pd.DataFrame:
 
             pred = model.predict(X, verbose=0)
             rul_raw = float(pred[-1])
-            rul = max(0.0, rul_raw)  # clamp at 0 so we don't show negative RUL
+            rul = max(0.0, rul_raw)
         else:
-            # Baseline: no TF available
             rul = simple_baseline_rul(eng_df)
 
         status = get_engine_status(rul)
         prob = failure_probability(rul)
+        risk = get_risk_level(rul)  # ✅ NEW
 
         records.append({
             "engine_id": eid,
             "last_cycle": int(eng_df["cycle"].max()),
             "predicted_RUL": rul,
             "failure_probability": prob,
+            "risk_level": risk,  # ✅ NEW
             "status": status,
         })
 
@@ -362,7 +375,6 @@ if not set(["engine_id", "cycle"]).issubset(df.columns):
     st.error("Data does not contain required 'engine_id' and 'cycle' columns.")
     st.stop()
 
-# Model selection (if GRU model available)
 available_models = ["LSTM"]
 if GRU_PATH.exists():
     available_models.append("GRU")
@@ -392,10 +404,13 @@ with tab_fleet:
             display_df = fleet_df.copy()
             display_df["predicted_RUL"] = display_df["predicted_RUL"].round(2)
             display_df["failure_probability"] = (display_df["failure_probability"] * 100).round(1)
+
             display_df.rename(columns={
                 "predicted_RUL": "RUL (cycles)",
-                "failure_probability": "Failure probability (%)"
+                "failure_probability": "Failure probability (%)",
+                "risk_level": "Risk Level",
             }, inplace=True)
+
             st.dataframe(display_df, use_container_width=True)
 
         with col2:
@@ -412,22 +427,42 @@ with tab_fleet:
             fig.update_layout(yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig, use_container_width=True)
 
+        # ✅ NEW: risk distribution chart
+        st.markdown("#### Fleet Risk Distribution")
+        risk_counts = fleet_df["risk_level"].value_counts().reset_index()
+        risk_counts.columns = ["risk_level", "count"]
+        fig_risk = px.pie(
+            risk_counts,
+            names="risk_level",
+            values="count",
+            title="High / Medium / Low Risk Engines",
+        )
+        st.plotly_chart(fig_risk, use_container_width=True)
+
         st.markdown("---")
         st.markdown(
             "Engines at the **top of the table** have the **lowest RUL** and should be prioritized for maintenance."
         )
 
-        # Top risk engines (lowest RUL)
         st.markdown("#### Top 5 Highest-Risk Engines")
         top_n = 5
         top_risk = fleet_df.nsmallest(top_n, "predicted_RUL").copy()
         top_risk["predicted_RUL"] = top_risk["predicted_RUL"].round(2)
         top_risk["failure_probability"] = (top_risk["failure_probability"] * 100).round(1)
+
         top_risk.rename(columns={
             "predicted_RUL": "RUL (cycles)",
-            "failure_probability": "Failure probability (%)"
+            "failure_probability": "Failure probability (%)",
         }, inplace=True)
-        st.table(top_risk[["engine_id", "last_cycle", "RUL (cycles)", "Failure probability (%)", "status"]])
+
+        st.table(top_risk[[
+            "engine_id",
+            "last_cycle",
+            "RUL (cycles)",
+            "Failure probability (%)",
+            "risk_level",
+            "status"
+        ]])
 
 # =============================
 # TAB 2: Single Engine Detail
@@ -440,7 +475,6 @@ with tab_engine:
 
     engine_df = df[df["engine_id"] == selected_engine].sort_values("cycle").reset_index(drop=True)
 
-    # Simulation slider: predict as of an earlier cycle if desired
     max_cycle_available = int(engine_df["cycle"].max())
     min_allowed_cycle = int(engine_df["cycle"].min()) + SEQ_LEN
 
@@ -468,7 +502,6 @@ with tab_engine:
     with st.expander("Show sensor trend plot"):
         plot_sensor_trends(engine_sim_df, selected_engine)
 
-    # Ensure required feature columns exist
     missing_features = [col for col in FEATURE_COLUMNS if col not in engine_sim_df.columns]
     if missing_features:
         st.error(f"Missing required feature columns: {missing_features}")
@@ -476,7 +509,6 @@ with tab_engine:
 
     # ---------- Deep model available (local) ----------
     if TF_AVAILABLE and (LSTM_PATH.exists() or GRU_PATH.exists()):
-        # Choose which model to use for this engine
         if model_choice == "GRU" and GRU_PATH.exists():
             model = load_model(GRU_PATH)
         else:
@@ -495,8 +527,9 @@ with tab_engine:
             predicted_rul_raw = float(rul_pred[-1])
             predicted_rul = max(0.0, predicted_rul_raw)
             prob = failure_probability(predicted_rul)
+            risk = get_risk_level(predicted_rul)  # ✅ NEW
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
 
             with col1:
                 st.metric("Predicted Remaining Useful Life", f"{predicted_rul:.2f} cycles")
@@ -505,6 +538,9 @@ with tab_engine:
                 st.metric("Failure Probability", f"{prob * 100:.1f} %")
 
             with col3:
+                st.metric("Risk Level", risk)
+
+            with col4:
                 st.markdown("### Health Status")
                 st.write(get_engine_status(predicted_rul))
 
@@ -514,7 +550,6 @@ with tab_engine:
                 f"{SEQ_LEN} cycles × {len(FEATURE_COLUMNS)} features`"
             )
 
-            # ---------- PDF report download ----------
             report_bytes = build_engine_report_pdf(
                 engine_id=selected_engine,
                 sim_cycle=sim_cycle,
@@ -529,7 +564,6 @@ with tab_engine:
                 mime="application/pdf",
             )
 
-            # ---------- RUL timeline ----------
             with st.expander("View predicted RUL degradation over time"):
                 timeline_df = compute_rul_timeline(engine_sim_df, model)
                 if timeline_df.empty:
@@ -544,7 +578,6 @@ with tab_engine:
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
 
-            # ---------- Feature Importance (SHAP with safe fallback) ----------
             with st.expander("Explain prediction"):
                 try:
                     feature_names, shap_scores = compute_shap_for_engine(model, scaled_engine)
@@ -567,8 +600,7 @@ with tab_engine:
                     st.warning("SHAP unavailable — showing approximate feature importance instead.")
 
                     try:
-                        # Universal fallback: variance-based feature importance
-                        last_seq = X_sequences[-1]  # shape: (seq_len, num_features)
+                        last_seq = X_sequences[-1]
                         variances = np.var(last_seq, axis=0)
 
                         fi_df = pd.DataFrame({
@@ -594,8 +626,9 @@ with tab_engine:
 
         predicted_rul = simple_baseline_rul(engine_sim_df)
         prob = failure_probability(predicted_rul)
+        risk = get_risk_level(predicted_rul)  # ✅ NEW
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             st.metric("Estimated Remaining Useful Life", f"{predicted_rul:.2f} cycles")
@@ -604,6 +637,9 @@ with tab_engine:
             st.metric("Failure Probability (baseline)", f"{prob * 100:.1f} %")
 
         with col3:
+            st.metric("Risk Level", risk)
+
+        with col4:
             st.markdown("### Health Status (baseline)")
             st.write(get_engine_status(predicted_rul))
 
@@ -642,7 +678,6 @@ with tab_engine:
             rolling_mean = engine_sim_df[sensor].rolling(window=window).mean()
             rolling_std = engine_sim_df[sensor].rolling(window=window).std()
 
-            # Avoid division by zero
             rolling_std = rolling_std.replace(0, 1e-6)
 
             z = (engine_sim_df[sensor] - rolling_mean) / rolling_std
