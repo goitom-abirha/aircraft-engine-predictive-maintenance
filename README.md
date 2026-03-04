@@ -5,12 +5,12 @@ Predicting Remaining Useful Life (RUL) of jet engines using NASA’s C-MAPSS tur
 This project demonstrates how machine learning can be used to predict aircraft engine degradation and estimate the remaining useful life of engines to support predictive maintenance and prevent unexpected failures.
 
 ### Key Capabilities
-
 • Remaining Useful Life (RUL) prediction using LSTM and GRU  
 • Aircraft engine degradation monitoring  
-• Fleet-level failure risk ranking  
-• Sensor anomaly detection  
-• Real-time dashboard using Streamlit
+• Fleet-level engine risk ranking (High / Medium / Low risk)  
+• Failure probability estimation  
+• Sensor anomaly detection using Z-score  
+• Interactive monitoring dashboard built with Streamlit
 
 ## Dashboard Preview
 
@@ -108,7 +108,7 @@ Dashboard features:
 • Visualize engine degradation trends  
 • Detect sensor anomalies using Z-score  
 • Generate PDF engine health reports  
-• Rank engines by failure risk  
+• Rank engines by predicted failure risk (High / Medium / Low)
 
 ---
 
@@ -125,6 +125,18 @@ Predictive maintenance helps airlines:
 In aviation systems, **false negatives (missed failures)** are significantly more costly than false positives because they may lead to catastrophic engine failure.
 
 ---
+## Engine Risk Classification
+
+The dashboard ranks engines based on predicted Remaining Useful Life (RUL) to help maintenance teams prioritize inspections.
+
+| Risk Level | Predicted RUL |
+|------------|--------------|
+| 🔴 High Risk | ≤ 20 cycles |
+| 🟡 Medium Risk | 21 – 50 cycles |
+| 🟢 Low Risk | > 50 cycles |
+
+This risk classification allows Maintenance, Repair, and Overhaul (MRO) teams to quickly identify engines requiring immediate attention and schedule maintenance more effectively.
+
 ## Project Structure
 
 ```
