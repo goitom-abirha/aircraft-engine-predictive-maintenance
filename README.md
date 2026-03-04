@@ -4,6 +4,19 @@ Predicting Remaining Useful Life (RUL) of jet engines using NASA’s C-MAPSS tur
 
 This project demonstrates how machine learning can be used to predict aircraft engine degradation and estimate the remaining useful life of engines to support predictive maintenance and prevent unexpected failures.
 
+### Key Capabilities
+
+• Remaining Useful Life (RUL) prediction using LSTM and GRU  
+• Aircraft engine degradation monitoring  
+• Fleet-level failure risk ranking  
+• Sensor anomaly detection  
+• Real-time dashboard using Streamlit
+
+## Dashboard Preview
+
+![Aircraft Engine Dashboard](dashboard.png)
+
+
 ---
 
 ## Project Overview
@@ -59,7 +72,7 @@ This project uses the **FD001 subset** which contains:
 
 ---
 
-# Deep Learning Models
+## Deep Learning Models
 
 Two sequence models were trained for RUL regression.
 
